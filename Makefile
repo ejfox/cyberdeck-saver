@@ -16,7 +16,7 @@ METAL    = $(shell xcrun --find metal)
 METALLIB = $(shell xcrun --find metallib)
 LIPO     = xcrun lipo
 
-.PHONY: all clean install reinstall universal
+.PHONY: all clean install reinstall universal edit-config config-path zip
 
 all: universal
 
@@ -64,6 +64,8 @@ build/CyberdeckSaver-x86_64: $(SWIFT_SOURCES)
 build/CyberdeckSaver-universal: build/CyberdeckSaver-arm64 build/CyberdeckSaver-x86_64
 	$(LIPO) -create -output $@ $^
 
+CONFIG_PATH = $(HOME)/Library/Containers/com.apple.ScreenSaver.Engine.legacyScreenSaver/Data/Library/Application\ Support/CyberdeckSaver/config.json
+
 # 5. Assemble .saver bundle
 universal: build/CyberdeckSaver-universal build/default.metallib Resources/Info.plist
 	@mkdir -p $(BUNDLE)/Contents/MacOS
@@ -75,12 +77,29 @@ universal: build/CyberdeckSaver-universal build/default.metallib Resources/Info.
 	@echo "✓ Built universal $(BUNDLE)"
 	@lipo -archs $(BUNDLE)/Contents/MacOS/$(BUNDLE_NAME)
 
-# Install locally
+# Install locally. User config lives in the sandbox container and is untouched.
 install: universal
 	@rm -rf $(INSTALL_DIR)/$(BUNDLE_NAME).saver
 	cp -R $(BUNDLE) $(INSTALL_DIR)/
 	@killall legacyScreenSaver 2>/dev/null || true
 	@echo "✓ Installed to ~/Library/Screen Savers/"
+
+# Open the user config. Path is inside the legacyScreenSaver sandbox container
+# so it survives `make install`. Create on first use if the screensaver hasn't
+# run yet and no config exists.
+edit-config:
+	@if [ ! -f $(CONFIG_PATH) ]; then \
+		echo "Config not found — run the screensaver once to write defaults, or creating a minimal one now"; \
+		mkdir -p $(dir $(CONFIG_PATH)); \
+		echo '{"render":{"textRedrawHz":60,"glitch":false,"fontSize":12}}' > $(CONFIG_PATH); \
+	fi
+	$${EDITOR:-vim} $(CONFIG_PATH)
+	@killall legacyScreenSaver 2>/dev/null || true
+	@echo "✓ Config saved; screensaver will reload on next start"
+
+# Print the config path (handy for scripting or Finder navigation).
+config-path:
+	@echo $(CONFIG_PATH)
 
 # Rebuild + reinstall
 reinstall: clean install

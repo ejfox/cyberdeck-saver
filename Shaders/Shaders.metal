@@ -68,7 +68,8 @@ fragment float4 bloom_fragment(
 {
     constexpr sampler s(coord::normalized, address::clamp_to_edge, filter::linear);
     float2 uv = in.texCoord;
-    float4 color = tex.sample(s, uv);
+    float4 original = tex.sample(s, uv);
+    float4 color = original;
     float2 stepSize = float2(1.8) / u.resolution;
 
     for (int i = 0; i < 24; i++) {
@@ -85,8 +86,7 @@ fragment float4 bloom_fragment(
         }
     }
 
-    // Subtle red emphasis on bloom
-    float4 original = tex.sample(s, uv);
+    // Subtle red emphasis on the bloom contribution only.
     float4 bloomOnly = color - original;
     bloomOnly.r *= 1.1;
     return original + bloomOnly;
